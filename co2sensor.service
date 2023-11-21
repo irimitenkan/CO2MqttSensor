@@ -1,0 +1,10 @@
+[Unit]
+Description=CO2Sensor MQTT client
+Documentation=https://github.com/irimitenkan/CO2MqttSensor#README
+After=network.target
+[Service]
+WorkingDirectory=%h/CO2MqttSensor
+ExecStart=python3 -u co2sensor.py
+Restart=always
+[Install]
+WantedBy=default.target
