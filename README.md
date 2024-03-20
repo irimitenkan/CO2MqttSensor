@@ -43,6 +43,10 @@ finally clone the CO2MqttSensor repository:
   git clone https://github.com/irimitenkan/CO2MqttSensor.git
   ```
 
+##Homeassistant OS
+
+You have to install and setup the [add-on](https://www.home-assistant.io/addons/) "[Mosquitto broker](https://www.home-assistant.io/integrations/mqtt/)".
+Install *CO2MqttSensor* MQTT client on other device e.g. Rasperry Pi Zero.
 
 # Configuration
 
