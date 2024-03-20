@@ -46,8 +46,7 @@ class MQTTClient (mqtt.Client):
         #self._client_id = ClientID
         self.cfg = cfg
         self._mqtt_client = None
-        self._update = False
-        self._online = False
+        self._disconnectRQ = False
         self._avTopics = dict()
         self._stTopics = dict()
         self._hassTopics = dict()
@@ -128,14 +127,31 @@ class MQTTClient (mqtt.Client):
         logging.warning(f"Ignoring message topic {message.topic}:{payload}")
 
     def on_disconnect(self, _client, _userdata, rc=0):
-        logging.debug("Broker disconnected: " + str(rc))
-        self.loop_stop()
+        """
+        on_disconnect by external event
+        """
+        if rc != 0 and not self._disconnectRQ:
+            logging.error("MQTT broker was disconnected: " + str(rc))
+            if 16==rc:
+                logging.error("by router , WIFI access point channel has changed?")
+                time.sleep(30) # some time to reconnect
+            elif 7==rc:
+                logging.error("broker down ?")
+                time.sleep(30) # some time to reconnect
+            else:
+                self.loop_stop()
+                logging.info(f"{self._client_id} MQTT exit (-1)!")
+                exit (-1)
+        else:
+            logging.debug("client disconnected: " + str(rc))
+            self.loop_stop()
 
     def client_down(self):
         """
         clean up everything when keyboard CTRL-C or daemon kill request occurs
         """
-        logging.debug(f"MQTT client {self._client_id} down")
+        logging.info(f"MQTT client {self._client_id} down")
+        self._disconnectRQ=True
         self.publish_avail_topics(avail=False)
         self.publish(self._ONLINE_STATE, False, RETAIN)
         self.disconnect()
@@ -152,8 +168,7 @@ class MQTTClient (mqtt.Client):
 
     def publish_state(self, topic, payload):
         """ publish state topic """
-        retain = RETAIN
-        self.publish(topic, payload, retain)
+        self.publish(topic=topic, payload=payload, retain=RETAIN)
         logging.debug(f"publish state:{str(topic)}:{payload}")
 
     def publish_hass(self):
@@ -161,7 +176,7 @@ class MQTTClient (mqtt.Client):
         publish all homeassistant discovery topics
         """
 
-        """     
+        """
             <discovery_prefix>/<component>/[<node_id>/]<object_id>/config
             https://www.home-assistant.io/integrations/mqtt#mqtt-discovery
             https://www.home-assistant.io/integrations/switch.mqtt/#configuration-variables
