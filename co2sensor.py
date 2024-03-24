@@ -20,8 +20,8 @@ from optparse import OptionParser
 from co2sensorclient import startClient
 
 __all__ = []
-__version__ = "0.1.0"
-__updated__ = '2023-11-21'
+__version__ = "0.2.0"
+__updated__ = '2024-03-24'
 __author__ = "irimi@gmx.de"
 
 
@@ -31,7 +31,7 @@ def main(argv=None):
     program_name = os.path.basename(sys.argv[0])
     program_version = f"v{__version__}"
     program_version_string = f"{program_name} {program_version} {__updated__}"
-    program_license = "Copyright 2023 irimi@gmx.de, published under GPL-3.0"
+    program_license = "Copyright 2023-2024 irimi@gmx.de, published under GPL-3.0"
 
     if argv is None:
         argv = sys.argv[1:]
