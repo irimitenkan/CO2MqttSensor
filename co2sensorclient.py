@@ -5,7 +5,7 @@ Created on 17.11.2023
 '''
 
 import logging
-from MQTTClient import MQTTClient
+import MQTTClient as hass
 from config import Config
 from co2device import CO2Device
 
@@ -19,108 +19,70 @@ LOG_LEVEL = {
     "DEBUG": logging.DEBUG
 }
 
-
-class Co2SensorClient (MQTTClient):
+class Co2SensorClient (hass.MQTTClient):
     """  CO2 Sensor MQTT client class """
 
     def __init__(self, cfg, version):
-        self.SENSOR_TOPICS = ["CO2", "Temperature", "Humidity"]
-        self.device = CO2Device()
+        #self.SENSOR_TOPICS = ["CO2", "Temperature", "Humidity"]
         self.errorcount=0
         self.version = version
-        if self.device.hasNoHumiditySens(cfg.HW):
-            logging.debug("Humidity sensor not supported by and removed")
-            self.SENSOR_TOPICS.remove("Humidity")
 
-        logging.debug(
-            f"SW activated sensors due to HW={cfg.HW} : {str(self.SENSOR_TOPICS)}")
+        clientTopics = {'CO2': hass.HASS_TYPE_SENSOR,
+                              'Temperature': hass.HASS_TYPE_SENSOR,
+                              'Humidity': hass.HASS_TYPE_SENSOR}
 
-        if self.device.open(int(cfg.VENDOR, 16), int(cfg.PRODUCT, 16)):
-            super().__init__(cfg, MQTT_CLIENT_ID)
-        else:
-            logging.error("program exit(-1)")
-            exit(-1)
+        hassconfigs = {'CO2': {hass.HASS_CONFIG_ICON:"mdi:molecule-co2",
+                               hass.HASS_CONFIG_DEVICE_CLASS : "carbon_dioxide",
+                               hass.HASS_CONFIG_VALUE_TEMPLATE :"{{ value_json.carbon_dioxide  }}",
+                               hass.HASS_CONFIG_UNIT : "ppm",
+                               hass.HASS_CONFIG_STATECLASS : "measurement"
+                               },
+                       'Temperature': {hass.HASS_CONFIG_ICON:"mdi:temperature-celsius",
+                               hass.HASS_CONFIG_DEVICE_CLASS : "temperature",
+                               hass.HASS_CONFIG_VALUE_TEMPLATE :"{{ value_json.temperature  }}",
+                               hass.HASS_CONFIG_UNIT : "°C",
+                               hass.HASS_CONFIG_STATECLASS : "measurement"
+                               },
+                       'Humidity': {hass.HASS_CONFIG_ICON:"mdi:water-percent",
+                               hass.HASS_CONFIG_DEVICE_CLASS : "humidity",
+                               hass.HASS_CONFIG_VALUE_TEMPLATE :"{{ value_json.humidity  }}",
+                               hass.HASS_CONFIG_UNIT : "%",
+                               hass.HASS_CONFIG_STATECLASS : "measurement"
+                               }
+                        }
 
-    def setupDevices(self):
+        super().__init__(cfg, MQTT_CLIENT_ID, clientTopics, hassconfigs, dict())
+
+    def setupDevice(self):
         """
         setup device specific sensors
         """
-        self._setupSensorTopics(self.SENSOR_TOPICS)
+        self.device = CO2Device()
+        if not self.device.open(int(self.cfg.VENDOR, 16), int(self.cfg.PRODUCT, 16)):
+            logging.error("program exit(-1)")
+            exit(-1)
+        if self.device.hasNoHumiditySens(self.cfg.HW):
+            logging.debug("Humidity sensor not supported by and removed")
+            del self.CLIENT_TOPICS["Humidity"]
+            del self.HASSCONFIGS["Humidity"]
 
-        sensor_device = {
+        logging.debug(
+            f"SW activated sensors due to HW={self.cfg.HW} : {str(self.CLIENT_TOPICS.keys())}")
+
+        mqtt_device = {
             "identifiers": [f"{MQTT_CLIENT_ID}_{self._hostname}"],
             "manufacturer": "TFA Dostmann",
             "model": self.cfg.HW,
             "sw_version": self.version,
             "name": f"{MQTT_CLIENT_ID}.{self._hostname}"
         }
-
-        for sensor in self.SENSOR_TOPICS:
-            json_attr = f"{self._baseTopic}/{sensor}"
-            unique_attr = f"{self._baseTopic}/{sensor}"
-            name = f"{MQTT_CLIENT_ID}.{self._hostname}{sensor}"
-            if sensor == "CO2":
-                config_sens = {
-                    "device": sensor_device,
-                    "availability_topic": self._avTopics[sensor],
-                    "device_class": "carbon_dioxide",
-                    "icon": "mdi:molecule-co2",
-                    "json_attributes_topic": json_attr,
-                    "state_class": "measurement",
-                    "unit_of_measurement": "ppm",
-                    "unique_id": unique_attr,
-                    "state_topic": self._stTopics[sensor],
-                    "name": name,
-                    "value_template": "{{ value_json.carbon_dioxide }}"
-                }
-            elif sensor == "Temperature":
-                config_sens = {
-                    "device": sensor_device,
-                    "availability_topic": self._avTopics[sensor],
-                    "device_class": "temperature",
-                    "icon": "mdi:temperature-celsius",
-                    "json_attributes_topic": json_attr,
-                    "state_class": "measurement",
-                    "unit_of_measurement": "°C",
-                    "unique_id": unique_attr,
-                    "state_topic": self._stTopics[sensor],
-                    "name": name,
-                    "value_template": "{{ value_json.temperature }}"
-                }
-            elif sensor == "Humidity":
-                config_sens = {
-                    "device": sensor_device,
-                    "availability_topic": self._avTopics[sensor],
-                    "device_class": "humidity",
-                    "icon": "mdi:water-percent",
-                    "json_attributes_topic": json_attr,
-                    "state_class": "measurement",
-                    "unit_of_measurement": "%",
-                    "unique_id": unique_attr,
-                    "state_topic": self._stTopics[sensor],
-                    "name": name,
-                    "value_template": "{{ value_json.humidity }}"
-                }
-            else:
-                logging.warning("No sensor config for {sensor} defined")
-                continue
-
-            self.SensorConfigs[sensor] = config_sens
-
-        self.poll()
+        return mqtt_device
 
     def poll(self):
         """
         poll data from device
         """
-        self.device.receive(self.SensorValues)
-        self.publish_state_topics()
-        # if self.device.receive(self.SensorValues):
-        #     self.publish_state_topics()
-        # else:
-        #     self.errorcount+=1
-        #     if self.errorcount>1:
-        #         self.client_down()
+        self.device.receive(self.TopicValues)
 
     def client_down(self):
             super().client_down()

@@ -6,18 +6,15 @@
   "PRODUCT":"0xa052",
   "TFA_MINI_WWW_LINK":"https://www.tfa-dostmann.de/en/product/co2-monitor-airco2ntrol-mini-31-5006",
   "TFA_COACH_WWW_LINK":"https://www.tfa-dostmann.de/en/product/co2-monitor-airco2ntrol-coach-31-5009",
-   
-   "REFRESH_RATE":60,
+  "REFRESH_RATE":60,
 
 	"MQTTBroker":{ 
-	"host":"<MQTT Broker's IP address>",
-	"port": 8883,
+	"host":"localhost",
+	"port": 1883,
+	"//port": 8883,
 	"username":"brokerUserName",
 	"password":"brokerPassWD",
-	"insecure":true,
-	"connection_retries":3,
 	"clientkeyfile":"",
 	"clientcertfile":""
   }
-
 }
