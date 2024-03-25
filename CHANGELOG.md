@@ -1,5 +1,12 @@
 # Change Log
 
+## v0.2.1
+
+### Changed
+ * TLS connection fix
+ * hass discovery fix
+ * MQTTClient generic update
+
 ## v0.2.0
 
 ### Changed

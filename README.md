@@ -70,10 +70,10 @@ Example config.json
       "port": 8883,
       "username":"<USERNAME>",
       "password":"<SECRET>",
-      "insecure":true,
-      "connection_retries":3,
-      "clientkeyfile":"",
-      "clientcertfile":""
+
+      "servercafile":"./ca.crt",
+      "clientkeyfile":"./client.key",
+      "clientcertfile":"./client.crt"
     }
 
 }
