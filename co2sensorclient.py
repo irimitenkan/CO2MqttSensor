@@ -9,7 +9,7 @@ import MQTTClient as hass
 from config import Config
 from co2device import CO2Device
 
-MQTT_CLIENT_ID = 'CO2Sensor'
+MQTT_CLIENT_ID = 'co2sensor'
 
 """ Logging level: INFO, DEBUG, ERROR, WARN  """
 LOG_LEVEL = {
@@ -23,14 +23,27 @@ class Co2SensorClient (hass.MQTTClient):
     """  CO2 Sensor MQTT client class """
 
     def __init__(self, cfg, version):
-        #self.SENSOR_TOPICS = ["CO2", "Temperature", "Humidity"]
         self.errorcount=0
         self.version = version
+        super().__init__(cfg, MQTT_CLIENT_ID)
 
-        clientTopics = {'CO2': hass.HASS_TYPE_SENSOR,
-                              'Temperature': hass.HASS_TYPE_SENSOR,
-                              'Humidity': hass.HASS_TYPE_SENSOR}
+    def setupClientTopics(self)->dict:
+        """
+        get a dict() which defines the required client topic
+        based on HASS types
+        to be implemented by derived class
+        """
+        clientTopics = {'CO2': hass.HASS_COMPONENT_SENSOR,
+                              'Temperature': hass.HASS_COMPONENT_SENSOR,
+                              'Humidity': hass.HASS_COMPONENT_SENSOR}
+        return clientTopics
 
+    def setupHassDiscoveryConfigs(self) -> dict:
+        """
+        get a dict() which defines the required config topics
+        based on HASS
+        to be implemented by derived class
+        """
         hassconfigs = {'CO2': {hass.HASS_CONFIG_ICON:"mdi:molecule-co2",
                                hass.HASS_CONFIG_DEVICE_CLASS : "carbon_dioxide",
                                hass.HASS_CONFIG_VALUE_TEMPLATE :"{{ value_json.carbon_dioxide  }}",
@@ -50,8 +63,7 @@ class Co2SensorClient (hass.MQTTClient):
                                hass.HASS_CONFIG_STATECLASS : "measurement"
                                }
                         }
-
-        super().__init__(cfg, MQTT_CLIENT_ID, clientTopics, hassconfigs, dict())
+        return hassconfigs
 
     def setupDevice(self):
         """
@@ -85,8 +97,8 @@ class Co2SensorClient (hass.MQTTClient):
         self.device.receive(self.TopicValues)
 
     def client_down(self):
-            super().client_down()
-            self.device.close()
+        super().client_down()
+        self.device.close()
 
 def startClient(cfgfile: str, version: str):
     """

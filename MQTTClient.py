@@ -30,9 +30,11 @@ RETAIN = True
 # hostname = socket.gethostname()
 HASS_DISCOVERY_PREFIX = 'homeassistant'
 
-HASS_TYPE_BINARY_SENSOR = "binary_sensor"
-HASS_TYPE_SENSOR = "sensor"
-HASS_TYPE_BUTTON = "button"
+HASS_COMPONENT_BINARY_SENSOR = "binary_sensor"
+HASS_COMPONENT_SENSOR = "sensor"
+HASS_COMPONENT_BUTTON = "button"
+HASS_COMPONENT_SWITCH = "switch"
+HASS_COMPONENT_NUMBER = "number"
 
 HASS_CONFIG_DEVICE = "device"
 HASS_CONFIG_DEVICE_CLASS = "device_class"
@@ -40,46 +42,75 @@ HASS_CONFIG_ICON = "icon"
 HASS_CONFIG_VALUE_TEMPLATE = "value_template"
 HASS_CONFIG_UNIT = "unit_of_measurement"
 HASS_CONFIG_STATECLASS = "state_class"
+HASS_CONFIG_COMMAND = "command_topic"
+HASS_CONFIG_PAYLOAD_ON = "payload_on"
+HASS_CONFIG_PAYLOAD_OFF = "payload_off"
 
 def encode_json(value) -> str:
     return json.dumps(value)
 
-
 class MQTTClient (mqtt.Client):
     """ MQTT client class with HASS discovery support """
 
-    def __init__(self, cfg, ClientID,clientTopics:dict, hassconfigs:dict, subscrTps:dict) -> None:
+    def __init__(self, cfg, ClientID) -> None:
         super().__init__(ClientID)
-        self.CLIENT_TOPICS = clientTopics
-        self.HASSCONFIGS = hassconfigs
-        self.SUBSCRIBE_TOPICS = subscrTps
-        self.TopicValues = dict()
-        self.TopicConfigs = dict()
 
         self.cfg = cfg
         self._disconnectRQ = False
+        self._hostname = self._getHostTopicId()
+        self.baseTopic = f"{ClientID}/{self._hostname}"
+        signal.signal(signal.SIGINT, self.daemon_kill)
+        signal.signal(signal.SIGTERM, self.daemon_kill)
+        self._ONLINE_STATE = f"{self.baseTopic}/online"
+
+        self.CLIENT_TOPICS = self.setupClientTopics()
+        self.HASSCONFIGS = self.setupHassDiscoveryConfigs()
+        self.SUBSCRIBE_TOPICS = self.setupSubscribeTopics()
+        if len(self.CLIENT_TOPICS) != len(self.HASSCONFIGS):
+            logging.warning("check your Topic setup: different sizes !")
+
+        self.TopicValues = dict()
+        self.TopicConfigs = dict()
+
         self._avTopics = dict()
         self._stTopics = dict()
         self._subTopics = dict()
         self._hassTopics = dict()
-        self._hostname = self._getHostTopicId()
 
-        self._baseTopic = f"{ClientID}/{self._hostname}"
-        signal.signal(signal.SIGINT, self.daemon_kill)
-        signal.signal(signal.SIGTERM, self.daemon_kill)
-        self._ONLINE_STATE = f"{self._baseTopic}/online"
         devId=self.setupDevice()
         self.poll() # get 1st values from device
-        self.setupTopics(self.CLIENT_TOPICS,self.SUBSCRIBE_TOPICS)
-        self.setupHassTopics(devId)
+        self._setupTopics(self.CLIENT_TOPICS,self.SUBSCRIBE_TOPICS)
+        self._setupHassTopics(devId)
 
     def setupDevice(self):
         """
-        setup device specific HASS config of
-        sensors, switches, buttons  etc
-        to be implemented by derived class 
+        setup device used for client communication
+        to be implemented by derived class
         """
         pass
+
+    def setupClientTopics(self) -> dict:
+        """
+        get a dict() which defines the required client topics
+        based on HASS types
+        to be implemented by derived class
+        """
+        return dict() #default empty dict
+
+    def setupHassDiscoveryConfigs(self) -> dict:
+        """
+        get a dict() which defines the required config topic
+        based on HASS
+        to be implemented by derived class
+        """
+        return dict() #default empty dict
+
+    def setupSubscribeTopics(self) -> dict:
+        """
+        get a dict() which defines the required subscribe topics
+        to be implemented by derived class
+        """
+        return dict() #default empty dict
 
     def poll(self):
         """
@@ -88,13 +119,13 @@ class MQTTClient (mqtt.Client):
         """
         pass
 
-    def setupHassTopics(self, devId:dict):
+    def _setupHassTopics(self, devId:dict):
         """
         setup all topics and HASS discovery configs
         """
         for tp in self.CLIENT_TOPICS:
-            json_attr = f"{self._baseTopic}/{tp}"
-            unique_attr = f"{self._baseTopic}/{tp}"
+            json_attr = f"{self.baseTopic}/{tp}"
+            unique_attr = f"{self.baseTopic}/{tp}"
             name = f"{self._client_id}.{self._hostname}.{tp}"
             # generic config attributs
             config_tp = {
@@ -112,7 +143,7 @@ class MQTTClient (mqtt.Client):
             self.TopicConfigs[tp] = config_tp
         self.poll()
 
-    def setupTopics(self, topics: dict, subscribeTps:dict):
+    def _setupTopics(self, topics: dict, subscribeTps:dict):
         """
         build all required sensor topics and init sensor values
         """
@@ -122,19 +153,26 @@ class MQTTClient (mqtt.Client):
             cmd=None
             if tp in subscribeTps:
                 cmd=subscribeTps[tp]
-            self._setupTopics(tp,topics.get(tp), cmd)
+            self._setupTopic(tp,topics.get(tp), cmd)
 
-    def _setupTopics(self, tp:str , deviceclass:str, subcmd=None):
-        self._avTopics[tp] = f"{self._baseTopic}/{tp}/available"
-        self._stTopics[tp] = f"{self._baseTopic}/{tp}"
-        self._hassTopics[tp] = f"{HASS_DISCOVERY_PREFIX}/{deviceclass}/{self._baseTopic}/{tp}/config"
+    def _setupTopic(self, tp:str , deviceclass:str, subcmd=None):
+        self._avTopics[tp] = f"{self.baseTopic}/{tp}/available"
+        self._stTopics[tp] = f"{self.baseTopic}/{tp}/state"
+        # hassTopic pattern :<discovery_prefix>/<component>/[<node_id>/]<object_id>/config
+        self._hassTopics[tp] = f"{HASS_DISCOVERY_PREFIX}/{deviceclass}/{self._hostname}/{tp}/config"
         if subcmd:
-            self._subTopics[tp] = f"{self._baseTopic}/{tp}/{subcmd}"
+            self._subTopics[tp] = f"{self.baseTopic}/{tp}/{subcmd}"
 
     def _getHostTopicId(self):
+        """
+        defines the node_id in hass discovery topic
+        """
         return socket.gethostname()
 
     def daemon_kill(self, *_args):
+        """
+        called by ctrl-c event
+        """
         self.client_down()
         logging.info(f"{self._client_id} MQTT daemon Goodbye!")
         exit(0)
@@ -145,11 +183,11 @@ class MQTTClient (mqtt.Client):
         """
         logging.debug(f"on_connect(): {conn_ack(rc)}")
         if 0 == rc:
-            self.publish(topic=self._ONLINE_STATE, payload=True, qos=0, retain=RETAIN)
-            time.sleep(1)
             self.publish_hass()
+            time.sleep(1)
             self.publish_avail_topics()
             time.sleep(1)
+            self.publish(topic=self._ONLINE_STATE, payload=True, qos=0, retain=RETAIN)
             self.publish_state_topics()
 
     def publish_avail_topics(self, avail=True):
@@ -160,11 +198,17 @@ class MQTTClient (mqtt.Client):
     def publish_state_topics(self):
         """ publish all state topics """
         for t in self._stTopics:
-            val = self.TopicConfigs[t]["device_class"]
-            self.publish_state(self._stTopics[t], encode_json(
-                {f"{val}": self.TopicValues[t]}))
+            val = self.HASSCONFIGS[t]["device_class"]
+            if "switch" == val:
+                self.publish_state(self._stTopics[t],self.TopicValues[t])
+            else:
+                self.publish_state(self._stTopics[t], encode_json(
+                    {f"{val}": self.TopicValues[t]}))
 
     def on_message(self, _client, _userdata, message):
+        """
+        on_message event by broker
+        """
         logging.debug(
             f" Received message  {str(message.payload) } on topic {message.topic} with QoS {str(message.qos)}")
         payload = str(message.payload.decode("utf-8"))
@@ -275,7 +319,7 @@ class MQTTClient (mqtt.Client):
         except BaseException as e:
             logging.error(
                     f"{str(e)}:could not connect to MQTT Broker {self.cfg.MQTTBroker.host} exit ()")
-            exit(-1)
+            exit(-3)
 
         # main MQTT client loop
         while True:

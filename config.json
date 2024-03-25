@@ -14,7 +14,12 @@
 	"//port": 8883,
 	"username":"brokerUserName",
 	"password":"brokerPassWD",
+	"servercafile":"",
 	"clientkeyfile":"",
-	"clientcertfile":""
+	"clientcertfile":"",
+
+	"//servercafile":"./ca.crt",
+	"//clientkeyfile":"./client.key",
+	"//clientcertfile":"./client.crt"
   }
 }
