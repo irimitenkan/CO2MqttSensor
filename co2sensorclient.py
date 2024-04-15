@@ -23,7 +23,6 @@ class Co2SensorClient (hass.MQTTClient):
     """  CO2 Sensor MQTT client class """
 
     def __init__(self, cfg, version):
-        self.errorcount=0
         self.version = version
         super().__init__(cfg, MQTT_CLIENT_ID)
 
