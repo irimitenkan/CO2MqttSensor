@@ -46,8 +46,13 @@ HASS_CONFIG_COMMAND = "command_topic"
 HASS_CONFIG_PAYLOAD_ON = "payload_on"
 HASS_CONFIG_PAYLOAD_OFF = "payload_off"
 
+DEBOUNCE_THRESHOLD = 2
+
 def encode_json(value) -> str:
     return json.dumps(value)
+
+def toStr(bstr:bytes)->str:
+    return str(bstr, encoding='utf-8')
 
 class MQTTClient (mqtt.Client):
     """ MQTT client class with HASS discovery support """
@@ -57,6 +62,7 @@ class MQTTClient (mqtt.Client):
 
         self.cfg = cfg
         self._disconnectRQ = False
+        self._disconnectCnt = 0
         self._hostname = self._getHostTopicId()
         self.baseTopic = f"{ClientID}/{self._hostname}"
         signal.signal(signal.SIGINT, self.daemon_kill)
@@ -126,7 +132,7 @@ class MQTTClient (mqtt.Client):
         for tp in self.CLIENT_TOPICS:
             json_attr = f"{self.baseTopic}/{tp}"
             unique_attr = f"{self.baseTopic}/{tp}"
-            name = f"{self._client_id}.{self._hostname}.{tp}"
+            name = f"{toStr(self._client_id)}.{self._hostname}.{tp}"
             # generic config attributs
             config_tp = {
                 "device": devId,
@@ -174,7 +180,7 @@ class MQTTClient (mqtt.Client):
         called by ctrl-c event
         """
         self.client_down()
-        logging.info(f"{self._client_id} MQTT daemon Goodbye!")
+        logging.info(f"{toStr(self._client_id)} MQTT daemon Goodbye!")
         exit(0)
 
     def on_connect(self, _client, _userdata, _flags, rc):
@@ -199,7 +205,7 @@ class MQTTClient (mqtt.Client):
         """ publish all state topics """
         for t in self._stTopics:
             val = self.HASSCONFIGS[t]["device_class"]
-            if "switch" == val:
+            if HASS_COMPONENT_SWITCH == val:
                 self.publish_state(self._stTopics[t],self.TopicValues[t])
             else:
                 self.publish_state(self._stTopics[t], encode_json(
@@ -219,19 +225,27 @@ class MQTTClient (mqtt.Client):
         on_disconnect by external event
         """
         if rc > 0 and not self._disconnectRQ:
-            logging.error("MQTT broker was disconnected: " + str(rc))
+            logging.error(f"MQTT broker was disconnected: errorcode={rc} ")
             match rc:
                 case 16:
-                    logging.error("by router , WIFI access point channel has changed?")
-                    time.sleep(30) # some time to reconnect
+                    logging.error("- by router , WIFI access point channel has changed?")
+                    self._disconnectCnt+=1
                 case 7:
-                    logging.error("broker down ?")
-                    time.sleep(30) # some time to reconnect
+                    logging.error("- broker down ?")
+                    self._disconnectCnt+=1
                 case 5:
-                    logging.error ("not authorised")
+                    logging.error ("- not authorised")
+                    self._disconnectRQ = True
+                case 2:
+                    logging.error ("- client protocoll error (wrong broker port?)")
                     self._disconnectRQ = True
                 case _:
                     logging.error ("unknown reason")
+                    self.loop_stop()
+                    self._disconnectRQ = True
+            if self._disconnectCnt>=DEBOUNCE_THRESHOLD:
+                    logging.info (f"disconnect debounce cnt = {self._disconnectCnt} ")
+                    logging.error ("connction broken - exit")
                     self.loop_stop()
                     self._disconnectRQ = True
         else:
@@ -242,7 +256,7 @@ class MQTTClient (mqtt.Client):
         """
         clean up everything when keyboard CTRL-C or daemon kill request occurs
         """
-        logging.info(f"MQTT client {self._client_id} down")
+        logging.info(f"MQTT client {toStr(self._client_id)} down")
         self._disconnectRQ=True
         self.publish_avail_topics(avail=False)
         self.publish(self._ONLINE_STATE, False, RETAIN)
@@ -288,7 +302,7 @@ class MQTTClient (mqtt.Client):
         """
         Start the MQTT client
         """
-        logging.info(f'Starting up MQTT Service {self._client_id}')
+        logging.info(f'Starting up MQTT Service {toStr(self._client_id)}')
         try:
             self.username_pw_set(
                 self.cfg.MQTTBroker.username,
@@ -318,27 +332,27 @@ class MQTTClient (mqtt.Client):
                 exit(-2)
         except BaseException as e:
             logging.error(
-                    f"{str(e)}:could not connect to MQTT Broker {self.cfg.MQTTBroker.host} exit ()")
+                    f"{str(e)}: connection to MQTT Broker {self.cfg.MQTTBroker.host} has failed & exit ()")
             exit(-3)
 
         # main MQTT client loop
         while True:
-            logging.debug(f"{self._client_id}-Loop")
+            logging.debug(f"{toStr(self._client_id)}-Loop")
             try:
                 time.sleep(self.cfg.REFRESH_RATE)
                 if self._disconnectRQ:
-                    logging.info(f"{self._client_id} MQTT Goodbye!")
+                    logging.info(f"{toStr(self._client_id)} MQTT Goodbye!")
                     exit(0)
                 else:
                     self.poll()
                     self.publish_state_topics()
             except KeyboardInterrupt:  # i.e. ctrl-c
                 self.client_down()
-                logging.info(f"{self._client_id} MQTT Goodbye!")
+                logging.info(f"{toStr(self._client_id)} MQTT Goodbye!")
                 exit(0)
 
             except Exception as e:
-                logging.error(f"{self._client_id} exception:{str(e)}")
+                logging.error(f"{toStr(self._client_id)} exception:{str(e)}")
                 self.disconnect()
                 self.loop_stop()
                 exit(-1)
