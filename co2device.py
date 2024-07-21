@@ -154,8 +154,8 @@ class CO2Device(object):
                     bTemp = False
                     # f = t * 9 / 5 + 32
                 elif bHum and (eHum1 == item or eHum2 == item):
-                    logging.debug(f"Humidity = {val:2.2f} %")
-                    sensorValues["Humidity"] = f"{val:2.2f}"
+                    logging.debug(f"Humidity = {val/100:2.2f} %")
+                    sensorValues["Humidity"] = f"{val/100 :2.2f}"
                     bHum = False
                 else:
                     logging.debug(
