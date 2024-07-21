@@ -15,7 +15,7 @@ A TFA CO2 sensor device with USB support in combination with a [Raspberry Pi Zer
 Supported CO2 devices are:
 1. [TFA CO2-Monitor-Airco2ntrol-Mini, without humidity measurement](https://www.tfa-dostmann.de/en/product/co2-monitor-airco2ntrol-mini-31-5006)
 
-2. still untested:[TFA CO2-Monitor-Airco2ntrol-Coach, incl. humidity measurement](https://www.tfa-dostmann.de/en/product/co2-monitor-airco2ntrol-coach-31-5009)
+2. [TFA CO2-Monitor-Airco2ntrol-Coach, incl. humidity measurement](https://www.tfa-dostmann.de/en/product/co2-monitor-airco2ntrol-coach-31-5009)
 
 3. Support of other available TFA devices with USB port is still unknown 
 
@@ -31,7 +31,7 @@ Required packages for Raspberry-Pi OS:
   ```
 
 
-On my Arch Linux / Manjaro system the correct package were:
+On my Arch Linux / Manjaro system the correct package are:
 
   ```
   sudo pacman -S python-paho-mqtt python-hidapi
@@ -85,39 +85,34 @@ Example config.json
 - option loglevel:INFO | WARN | DEBUG
 
 - option "HW":"AIRCO2NTROL_MINI" or "AIRCO2NTROL_COACH"
-  (AIRCO2NTROL_COACH still untested)
+
 - option: "VENDOR":"0x04d9",
           "PRODUCT":"0xa052",
 
-   These are the value IDs for AIRCO2NTROL_MINI. For other TFA CO2 devices with USB port try this on you linux maschine:
+   These are the value IDs for AIRCO2NTROL_MINI and AIRCO2NTROL_COACH. For other TFA CO2 devices with USB port try this on your linux machine:
 
   * connect sensor device with USB port and type 
 
   ```
-  sudo dmesg 
+  lsusb
   ```
 
   * you will see the vendor and product id at end of output like this:
 
  ```
-[ 4682.882895] usb 1-1: New USB device found, idVendor=04d9, idProduct=a052, bcdDevice= 2.00
-[ 4682.882921] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
-[ 4682.882936] usb 1-1: Product: USB-zyTemp
-[ 4682.882949] usb 1-1: Manufacturer: Holtek
-[ 4682.882962] usb 1-1: SerialNumber: 2.00
-[ 4682.892497] hid-generic 0003:04D9:A052.0004: hiddev96,hidraw0: USB HID v1.10 Device [Holtek USB-zyTemp] on usb-3f980000.usb-1/input0
+Bus 001 Device 002: ID 04d9:a052 Holtek Semiconductor, Inc. USB-zyTemp
   ```
 
 # UDEV-rules
 
 Since you have not adapted your UDEV rules on your *CO2MqttSensor* host the python scripts runs only with root access.
-To execute *CO2MQttSensor* without root access you must define a udev-rules to assign different access right when the CO2 sensor device is connected:
+To execute *CO2MQttSensor* without root access you must define a udev-rule to assign different access rights when the CO2 sensor device is connected:
 
 create a file `/etc/udev/rules.d/99-hidraw-permissions.rules`
 and add this line:
-`KERNEL=="hidraw*", ATTRS{idVendor}=="04d9", ATTRS{idProduct}=="a052", GROUP="plugdev", MODE="0660"`
+`SUBSYSTEMS=="usb", ATTRS{idVendor}=="04d9", ATTRS{idProduct}=="a052", GROUP="plugdev", MODE="0660"`
 
-on e.g.ARCH linux systems you may change the group to 
+on e.g.ARCH linux systems you may change it to
 `KERNEL=="hidraw*", ATTRS{idVendor}=="04d9", ATTRS{idProduct}=="a052", GROUP="input", MODE="0660"`
 
 then restart udev
@@ -128,7 +123,7 @@ and finally disconnect and reconnect you CO2 device from USB port.
 -to start from terminal
 
   ```
-  cd CO2MmqttSensor
+  cd CO2MqttSensor
   python3 co2sensor.py
   ```
 with option: -c FILE, --cfg=FILE  set config file default: ./config.json
