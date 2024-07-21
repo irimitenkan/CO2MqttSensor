@@ -1,10 +1,16 @@
 # Change Log
 
+## v0.2.3
+
+### Changed
+ * fix of issue #1
+ * documentation update
+
+
 ## v0.2.2
 
 ### Changed
  * broker disconnect handling
-
 
 ## v0.2.1
 
