@@ -5,8 +5,10 @@ Created on 19.11.2023
 '''
 import hid
 import logging
+from os import urandom
 
 TIMEOUT_MS = 5000
+LOOP_ERROR = 15
 
 # CO2 sensor items
 eHum1 = 0x41
@@ -16,9 +18,6 @@ eCO2 = 0x50
 eCO2_2 = 0x71  # on my mini device
 eUnkown1 = 0x6d
 eUnkown2 = 0x6e
-
-# eCal = 0x5d # only used for write access
-
 
 def listAllDevices():
     for device_dict in hid.enumerate():
@@ -48,6 +47,38 @@ def lookforDevice(vendor_id, product_id):
 def to16bit(val):
     return (val[0] << 8) | val[1]
 
+def getRandom(num = 8):
+    return list(urandom(num))
+
+def decrypt(data,key):
+    """
+    https://github.com/JsBergbau/TFACO2AirCO2ntrol_CO2Meter/blob/main/co2monitor.py
+    """
+    cstate = [0x48,  0x74,  0x65,  0x6D,  0x70,  0x39,  0x39,  0x65]
+
+    shuffle = [2, 4, 0, 7, 1, 6, 5, 3]
+
+    phase1 = [0] * 8
+    for i, o in enumerate(shuffle):
+        phase1[o] = data[i]
+
+    phase2 = [0] * 8
+    for i in range(8):
+        phase2[i] = phase1[i] ^ key[i]
+
+    phase3 = [0] * 8
+    for i in range(8):
+        phase3[i] = ( (phase2[i] >> 3) | (phase2[ (i-1+8)%8 ] << 5) ) & 0xff
+
+    ctmp = [0] * 8
+    for i in range(8):
+        ctmp[i] = ( (cstate[i] >> 4) | (cstate[i]<<4) ) & 0xff
+
+    out = [0] * 8
+    for i in range(8):
+        out[i] = (0x100 + phase3[i] - ctmp[i]) & 0xff
+
+    return out
 
 class CO2Device(object):
     """
@@ -60,15 +91,13 @@ class CO2Device(object):
 
     def __init__(self):
         self._dev = None
-        # self._openDev(cfg.vendor, cfg.product)
+        self.key=getRandom(8)
 
     def hasNoHumiditySens(self, HW):
         return HW == "AIRCO2NTROL_MINI"
 
     def close(self):
-        # print('\nExiting ...', file=sys.stderr)
         self._dev.close()
-        # sys.exit(0)
 
     def open(self, vendor, product):
         if lookforDevice(vendor, product):
@@ -81,9 +110,9 @@ class CO2Device(object):
                 prod = self._dev.get_product_string()
                 logging.debug(
                     f"CO2 devices opened: Manufacturer = {man} , Product = {prod}")
-                ret=self._dev.send_feature_report([0x0, 0x0])
+                ret=self._dev.send_feature_report([0x00] + self.key)
                 logging.debug(f"enter output mode - send_feature_report: {ret}")
-                return (2==ret)
+                return (len(self.key) +1 == ret)
 
             except IOError as ex:
                 logging.error(ex)
@@ -113,7 +142,14 @@ class CO2Device(object):
     def _read_(self):
         if self._dev:
             try:
-                data = self._dev.read(8, TIMEOUT_MS)
+                raw = self._dev.read(8, TIMEOUT_MS)
+
+                if raw[4] == 0x0d and (sum(raw[:3]) & 0xff) == raw[3]:
+                    data = raw
+                else:
+                    logging.debug("decrypting")
+                    data = decrypt(raw,self.key)
+
             except IOError as ex:
                 logging.error(ex)
                 man = self._dev.get_manufacturer_string()
@@ -123,11 +159,6 @@ class CO2Device(object):
                 return list()
             return data
 
-    def _testChecksum_(self, rec):
-        checks = rec[0]+rec[1]+rec[2] & 0xff
-        if rec[3] != checks:
-            logging.warning("CO2 Device Chcksum Error")
-
     def receive(self, sensorValues: dict()) -> bool:
         bCO2 = True
         bTemp = True
@@ -136,19 +167,23 @@ class CO2Device(object):
         else:
             bHum = False  # not availbale hence do not wait for
         logging.debug(f"----> waiting for {str(sensorValues.keys())} values froom device")
+        loop=0
         while (bHum or bCO2 or bTemp):  # wait since value was not received
+            loop+=1
+            if loop>=LOOP_ERROR:
+                logging.error("unexpected values from device, missing CO2/T/H value items")
+                return False
+
             rec = self._read_()
             if len(rec):
                 item = rec[0]
                 val = to16bit(rec[1:3])
 
                 if eCO2 == item:
-                    self._testChecksum_(rec)
                     logging.debug(f"CO2 = {val} ppm")
                     sensorValues["CO2"] = f"{val}"
                     bCO2 = False
                 elif eTemp == item:
-                    self._testChecksum_(rec)
                     logging.debug(f"Temperature = {val / 16.0 - 273.15:.2f} °C")
                     sensorValues["Temperature"] = f"{val / 16.0 - 273.15:.2f}"
                     bTemp = False
@@ -159,10 +194,10 @@ class CO2Device(object):
                     bHum = False
                 else:
                     logging.debug(
-                        f"unsed sensor item {hex(item)}={val} (value)")
+                        f"{loop}:ignoring sensor item {hex(item)}={val} (value)")
             else:
                 return False
-        logging.debug("<--- received values froom device")
+        logging.debug("<--- received values from device")
         return True
 
 

@@ -4,7 +4,7 @@ Created on 17.11.2023
 @author: irimi
 '''
 
-import logging
+import logging, os
 import MQTTClient as hass
 from config import Config
 from co2device import CO2Device
@@ -70,6 +70,7 @@ class Co2SensorClient (hass.MQTTClient):
         """
         self.device = CO2Device()
         if not self.device.open(int(self.cfg.VENDOR, 16), int(self.cfg.PRODUCT, 16)):
+            logging.error(f"access failure: vendor: {self.cfg.VENDOR} product: {self.cfg.PRODUCT}")
             logging.error("program exit(-1)")
             exit(-1)
         if self.device.hasNoHumiditySens(self.cfg.HW):
@@ -93,7 +94,7 @@ class Co2SensorClient (hass.MQTTClient):
         """
         poll data from device
         """
-        self.device.receive(self.TopicValues)
+        return (self.device.receive(self.TopicValues))
 
     def client_down(self):
         super().client_down()
@@ -108,4 +109,7 @@ def startClient(cfgfile: str, version: str):
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         datefmt='%H:%M:%S')
     client = Co2SensorClient(cfg, version)
+    if "posix" in os.name and os.geteuid() == 0:
+        logging.warning(f"It is not recommended to execute CO2MQTTSensor as root")
+
     client.startup_client()

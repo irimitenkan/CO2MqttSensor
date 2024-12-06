@@ -20,8 +20,8 @@ from optparse import OptionParser
 from co2sensorclient import startClient
 
 __all__ = []
-__version__ = "0.2.3"
-__updated__ = '2024-07-21'
+__version__ = "0.2.4"
+__updated__ = '2024-12-06'
 __author__ = "irimi@gmx.de"
 
 
@@ -55,7 +55,6 @@ def main(argv=None):
         print("cfgfile = %s" % opts.cfgfile)
 
     startClient(opts.cfgfile, __version__)
-
 
 if __name__ == "__main__":
     sys.exit(main())
