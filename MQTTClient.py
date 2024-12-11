@@ -84,9 +84,9 @@ class MQTTClient (mqtt.Client):
         self._hassTopics = dict()
 
         devId=self.setupDevice()
-        self.poll() # get 1st values from device
-        self._setupTopics(self.CLIENT_TOPICS,self.SUBSCRIBE_TOPICS)
-        self._setupHassTopics(devId)
+        if self.poll(): # get 1st values from device
+            self._setupTopics(self.CLIENT_TOPICS,self.SUBSCRIBE_TOPICS)
+            self._setupHassTopics(devId)
 
     def setupDevice(self):
         """
@@ -344,8 +344,12 @@ class MQTTClient (mqtt.Client):
                     logging.info(f"{toStr(self._client_id)} MQTT Goodbye!")
                     exit(0)
                 else:
-                    self.poll()
-                    self.publish_state_topics()
+                    if self.poll():
+                        self.publish_state_topics()
+                    else:
+                        logging.error(f"{toStr(self._client_id)}: polling has failed")
+                        self.client_down()
+                        exit(-2)
             except KeyboardInterrupt:  # i.e. ctrl-c
                 self.client_down()
                 logging.info(f"{toStr(self._client_id)} MQTT Goodbye!")

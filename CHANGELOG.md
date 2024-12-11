@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.2.4
+
+### Changed
+ * issue #3 - decryption support for older devices
+ * error handling improved
+
 ## v0.2.3
 
 ### Changed
