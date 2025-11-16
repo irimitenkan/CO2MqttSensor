@@ -20,8 +20,8 @@ from optparse import OptionParser
 from co2sensorclient import startClient
 
 __all__ = []
-__version__ = "0.2.4"
-__updated__ = '2024-12-06'
+__version__ = "0.2.5"
+__updated__ = '2025-11-16'
 __author__ = "irimi@gmx.de"
 
 
